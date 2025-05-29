@@ -314,7 +314,7 @@ elif pagina == "📊 Grafici":
             genere_row = row['genere'] if 'genere' in row and pd.notnull(row['genere']) else utente['genere']
             benchmark = benchmark_df[
                 (benchmark_df['esercizio'] == row['esercizio']) &
-                (benchmarkDf['genere'] == genere_row)
+                (benchmark_df['genere'] == genere_row)
             ]
             benchmark = benchmark.squeeze() if not benchmark.empty else None
             livello = "Non valutabile"
@@ -436,8 +436,8 @@ elif pagina == "📊 Grafici":
             livelli_cat = []
             for _, row in test_cat.iterrows():
                 benchmark = benchmark_df[
-                    (benchmarkDf['esercizio'] == row['esercizio']) &
-                    (benchmarkDf['genere'] == row['genere'])
+                    (benchmark_df['esercizio'] == row['esercizio']) &
+                    (benchmark_df['genere'] == row['genere'])
                 ]
                 benchmark = benchmark.squeeze() if not benchmark.empty else None
                 livello_num = 0
