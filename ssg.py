@@ -4,11 +4,15 @@ import datetime
 import plotly.graph_objects as go
 import os
 
+# Imposta la configurazione della pagina all'inizio
+st.set_page_config(page_title="Fitness Gauge", layout="wide")
+
 # Load CSVs
 utenti_df = pd.read_csv("fitness_app/utenti.csv")
 esercizi_df = pd.read_csv("fitness_app/esercizi.csv")
 test_df = pd.read_csv("fitness_app/test.csv")
 benchmark_df = pd.read_csv("fitness_app/benchmark.csv")
+wod_df = pd.read_csv("fitness_app/wod.csv")  # Aggiunto caricamento del file wod.csv
 
 # Carica il CSV dei WOD (Workout Of the Day)
 wod_path = "fitness_app/wod.csv"
@@ -16,7 +20,20 @@ if not os.path.exists(wod_path):
     pd.DataFrame(columns=["data", "titolo", "descrizione"]).to_csv(wod_path, index=False)
 wod_df = pd.read_csv(wod_path)
 
-st.set_page_config(page_title="Fitness Gauge", layout="wide")
+# Correggi automaticamente i formati di data non validi
+def correggi_date(df, colonna_data):
+    try:
+        df[colonna_data] = pd.to_datetime(df[colonna_data], format="%Y-%m-%d", errors="coerce")
+        if df[colonna_data].isnull().any():
+            st.warning("Alcune date non valide sono state rilevate e rimosse.")
+            df = df.dropna(subset=[colonna_data])
+    except Exception as e:
+        st.error(f"Errore durante la correzione delle date: {e}")
+        st.stop()
+    return df
+
+wod_df = correggi_date(wod_df, "data")
+
 st.title("🏋️ Fitness Gauge")
 
 # Inizializza session state
@@ -61,6 +78,15 @@ if not st.session_state.logged_in:
             st.error("Nome, PIN o ruolo non validi. Riprova.")
     st.stop()
 
+# Tema chiaro/scuro
+tema = st.sidebar.radio("🎨 Tema", ["Chiaro", "Scuro"])
+st.markdown(
+    f"""<style>
+    body {{ background-color: {'#1e1e1e' if tema == 'Scuro' else '#ffffff'}; color: {'#f0f0f0' if tema == 'Scuro' else '#000000'}; }}
+    </style>""",
+    unsafe_allow_html=True
+)
+
 # Gestione del refresh della pagina
 if st.session_state.refresh:
     st.session_state.refresh = False
@@ -73,6 +99,7 @@ st.success(f"Benvenuto, {utente['nome']} ({utente['ruolo']})")
 # Barra laterale per navigazione con pulsanti
 if utente['ruolo'] == 'coach':
     pagine_sidebar = [
+        "🏠 Dashboard",  # Nuova home
         "📅 Calendario WOD",
         "➕ Inserisci nuovo test",
         "👤 Profilo Atleta",
@@ -81,15 +108,21 @@ if utente['ruolo'] == 'coach':
         "📊 Bilanciamento Atleti",
         "➕ Aggiungi Utente",
         "⚙️ Gestione Benchmark",
-        "📊 Grafici"
+        "📊 Grafici",
+        "📈 Storico Progressi",
+        "📒 WOD",
+        "🏆 Classifiche"
     ]
 else:
     pagine_sidebar = [
+        "🏠 Dashboard",  # Nuova home
         "📅 Calendario WOD",
         "➕ Inserisci nuovo test",
         "👤 Profilo Atleta",
         "📊 Grafici",
-        "📜 Storico Test"  # Nuova pagina per la storia dei test atleta
+        "📜 Storico Test",
+        "📈 Storico Progressi",
+        "📒 WOD",
     ]
 
 # Inizializza la pagina attiva se non esiste
@@ -109,13 +142,17 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     for pagina_nome in pagine_sidebar:
         if st.button(pagina_nome, key=f"btn_{pagina_nome}"):
-            st.session_state.pagina_attiva = pagina_nome
+            st.session_state.pagina_attiva = pagina_nome  # Aggiorna correttamente la pagina attiva
 
     # Pulsante per uscire
     if st.button("Esci", key="sidebar_logout_button"):
         logout()
 
-pagina = st.session_state.pagina_attiva
+# Assicurati che la pagina attiva venga caricata
+pagina = st.session_state.get('pagina_attiva', pagine_sidebar[0])
+
+# Debug: Mostra la pagina attiva per verificare
+st.write(f"DEBUG: Pagina attiva: {pagina}")
 
 # Definizione dei livelli di valutazione
 livelli_val = {"base": 1, "principiante": 2, "intermedio": 3, "buono": 4, "elite": 5}
@@ -145,10 +182,12 @@ if pagina == "➕ Inserisci nuovo test":
     data_test = st.date_input("Data", value=datetime.date.today())
     peso_corporeo = utente["peso"] if utente["ruolo"] == "atleta" else st.number_input("Peso corporeo (kg)", min_value=30.0, max_value=200.0, step=0.1)
 
+    # 🔁 BLOCCO SOSTITUITO: if st.button("Salva test"):
     if st.button("Salva test"):
         relativo = None
         if tipo_valore == "kg_rel" and peso_corporeo > 0:
-            relativo = round(float(valore) / float(peso_corporeo), 2)  # Calcolo del valore relativo
+            relativo = round(float(valore) / float(peso_corporeo), 2)
+
         nuovo_test = {
             "nome": nome_atleta,
             "esercizio": esercizio,
@@ -157,11 +196,228 @@ if pagina == "➕ Inserisci nuovo test":
             "peso_corporeo": peso_corporeo,
             "relativo": relativo,
             "data": data_test.strftime("%Y-%m-%d"),
-            "genere": genere  # Aggiunto il genere al test
+            "genere": genere
         }
         test_df = pd.concat([test_df, pd.DataFrame([nuovo_test])], ignore_index=True)
         test_df.to_csv("fitness_app/test.csv", index=False)
         st.success("Test salvato correttamente!")
+
+        # Feedback intelligente
+        test_utente = test_df[(test_df["nome"] == nome_atleta) & (test_df["esercizio"] == esercizio)]
+        test_utente["data"] = pd.to_datetime(test_utente["data"])
+        test_utente = test_utente.sort_values("data")
+
+        # Calcolo valore attuale
+        if tipo_valore == "tempo":
+            val_attuale = int(minuti) * 60 + int(secondi)
+        elif tipo_valore == "kg_rel":
+            val_attuale = relativo
+        else:
+            val_attuale = float(valore)
+
+        # Recupera benchmark
+        benchmark = benchmark_df[
+            (benchmark_df["esercizio"] == esercizio) &
+            (benchmarkDf["genere"] == genere)
+        ]
+        benchmark = benchmark.squeeze() if not benchmark.empty else None
+
+        livello_raggiunto = "Non valutabile"
+        livello_prossimo = None
+        target_prossimo = None
+
+        if benchmark is not None:
+            soglie = ["base", "principiante", "intermedio", "buono", "elite"]
+            valori = []
+            for soglia in soglie:
+                valore_raw = benchmark[soglia]
+                if tipo_valore == "tempo" and ":" in str(valore_raw):
+                    m, s = map(int, valore_raw.split(":"))
+                    valori.append(m * 60 + s)
+                else:
+                    valori.append(float(valore_raw))
+
+            # Determina il livello attuale
+            for i, soglia in enumerate(reversed(soglie)):
+                if (tipo_valore == "tempo" and val_attuale <= valori[-(i+1)]) or (tipo_valore != "tempo" and val_attuale >= valori[-(i+1)]):
+                    livello_raggiunto = soglia.capitalize()
+                    if i != 0:
+                        livello_prossimo = soglie[-(i)]  # livello appena superiore
+                        target_prossimo = valori[-(i)]
+                    break
+
+        st.info(f"🎯 Hai raggiunto il livello **{livello_raggiunto}** nel test di **{esercizio}**.")
+        if livello_prossimo and target_prossimo:
+            st.warning(f"➡️ Obiettivo consigliato: livello **{livello_prossimo.capitalize()}** ({target_prossimo}).")
+        st.caption(f"📅 Ripeti il test tra circa **6 settimane** ({(data_test + datetime.timedelta(weeks=6)).strftime('%d/%m/%Y')}).")
+
+        # Miglioramento percentuale rispetto al test precedente
+        if len(test_utente) > 1:
+            penultimo = test_utente.iloc[-2]
+            if tipo_valore == "tempo":
+                m, s = map(int, str(penultimo["valore"]).split(":"))
+                val_prec = m * 60 + s
+            elif tipo_valore == "kg_rel":
+                val_prec = penultimo["relativo"]
+            else:
+                val_prec = float(penultimo["valore"])
+
+            if val_prec and val_prec != 0:
+                if tipo_valore == "tempo":
+                    delta = val_prec - val_attuale
+                    miglioramento = (delta / val_prec) * 100
+                else:
+                    delta = val_attuale - val_prec
+                    miglioramento = (delta / val_prec) * 100
+                st.success(f"📈 Miglioramento del **{miglioramento:.2f}%** rispetto al test precedente.")
+
+                # Badge sbloccato
+                if livello_raggiunto != "Non valutabile":
+                    if livelli_val.get(livello_raggiunto.lower(), 0) > livelli_val.get(penultimo.get("livello", "").lower(), 0):
+                        st.balloons()
+                        st.success("🏅 Hai sbloccato un nuovo badge di livello!")
+
+    # Mostra l'expander solo dopo il salvataggio
+    if st.session_state.get('show_expander', False):
+        with st.expander("📊 Analisi del test appena inserito", expanded=True):
+            # 1. Calcola livello raggiunto
+            benchmark = benchmark_df[
+                (benchmarkDf['esercizio'].astype(str).str.strip() == str(esercizio).strip()) &
+                (benchmarkDf['genere'].astype(str).str.strip() == str(genere).strip())
+            ]
+            benchmark = benchmark.squeeze() if not benchmark.empty else None
+            livello_raggiunto = "Non valutabile"
+            livello_num = 0
+            prossimo_livello = None
+            valore_target = None
+            livelli_val = {"base": 1, "principiante": 2, "intermedio": 3, "buono": 4, "elite": 5}
+            livelli_ordine = list(livelli_val.keys())
+            val = None
+            if benchmark is not None and isinstance(benchmark, pd.Series):
+                tipo = benchmark['tipo_valore']
+                try:
+                    peso_corporeo = float(peso_corporeo)
+                except Exception:
+                    peso_corporeo = None
+                if tipo == 'kg_rel' and peso_corporeo and peso_corporeo != 0:
+                    try:
+                        val = float(valore) / peso_corporeo
+                    except Exception:
+                        val = None
+                elif tipo == 'reps' or tipo == 'valore':
+                    try:
+                        val = float(valore)
+                    except Exception:
+                        val = None
+                elif tipo == 'tempo':
+                    try:
+                        m, s = map(int, str(valore).split(":"))
+                        val = m * 60 + s
+                        benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
+                            lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]) if ":" in str(x) else float(x)
+                            if pd.notnull(x) else x
+                        )
+                    except Exception:
+                        val = None
+                else:
+                    try:
+                        val = float(valore)
+                    except Exception:
+                        val = None
+
+                # Trova livello raggiunto
+                livello_nome_trovato = None
+                if tipo == 'tempo':
+                    for livello_nome in reversed(livelli_ordine):
+                        soglia = benchmark[livello_nome]
+                        if isinstance(soglia, str) and ":" in soglia:
+                            m, s = map(int, soglia.split(":"))
+                            soglia = m * 60 + s
+                        else:
+                            soglia = float(soglia)
+                        if val is not None and val <= soglia:
+                            livello_nome_trovato = livello_nome.capitalize()
+                            livello_num = livelli_val[livello_nome]
+                            break
+                else:
+                    for livello_nome in reversed(livelli_ordine):
+                        soglia = benchmark[livello_nome]
+                        if isinstance(soglia, str):
+                            soglia = float(soglia)
+                        if val is not None and val >= soglia:
+                            livello_nome_trovato = livello_nome.capitalize()
+                            livello_num = livelli_val[livello_nome]
+                            break
+                livello_raggiunto = livello_nome_trovato if livello_nome_trovato else "Non valutabile"
+
+                # 2. Consiglia prossimo livello e valore target
+                if livello_nome_trovato and livello_nome_trovato.lower() != "elite":
+                    idx = livelli_ordine.index(livello_nome_trovato.lower())
+                    if idx < len(livelli_ordine) - 1:
+                        prossimo_livello = livelli_ordine[idx + 1].capitalize()
+                        valore_target = benchmark[livelli_ordine[idx + 1]]
+                        if tipo == 'tempo' and isinstance(valore_target, (int, float)):
+                            minuti = int(valore_target) // 60
+                            secondi = int(valore_target) % 60
+                            valore_target = f"{minuti:02d}:{secondi:02d}"
+                elif livello_nome_trovato and livello_nome_trovato.lower() == "elite":
+                    prossimo_livello = None
+                    valore_target = None
+
+            # Mostra risultati analisi post-salvataggio
+            st.info(f"**Livello raggiunto:** {livello_raggiunto}")
+            if prossimo_livello and valore_target is not None:
+                st.info(f"🎯 Obiettivo prossimo livello: **{prossimo_livello}** (target: {valore_target})")
+            elif livello_raggiunto == "Elite":
+                st.success("🏆 Complimenti! Hai raggiunto il livello massimo (Elite).")
+
+            # 3. Suggerisci quando ripetere il test (6 settimane)
+            data_prossimo_test = data_test + datetime.timedelta(weeks=6)
+            st.info(f"🔁 Ripeti questo test il: **{data_prossimo_test.strftime('%Y-%m-%d')}**")
+
+            # 4. Calcola miglioramento percentuale rispetto al test precedente
+            storico = test_df[
+                (test_df['nome'] == nome_atleta) &
+                (test_df['esercizio'] == esercizio) &
+                (test_df['data'] < data_test.strftime("%Y-%m-%d"))
+            ].sort_values("data", ascending=False)
+            miglioramento = None
+            badge = False
+            if not storico.empty:
+                row_prec = storico.iloc[0]
+                # Calcola valore precedente
+                val_prec = None
+                if tipo_valore == 'kg_rel' and float(row_prec['peso_corporeo']) > 0:
+                    val_prec = float(row_prec['valore']) / float(row_prec['peso_corporeo'])
+                elif tipo_valore == 'reps' or tipo_valore == 'valore':
+                    val_prec = float(row_prec['valore'])
+                elif tipo_valore == 'tempo':
+                    m, s = map(int, str(row_prec['valore']).split(":"))
+                    val_prec = m * 60 + s
+                else:
+                    val_prec = float(row_prec['valore'])
+
+                # Calcola miglioramento percentuale (attenzione: per il tempo, meno è meglio)
+                if val is not None and val_prec is not None:
+                    if tipo_valore == 'tempo':
+                        miglioramento = (val_prec - val) / val_prec * 100 if val_prec > 0 else None
+                    else:
+                        miglioramento = (val - val_prec) / val_prec * 100 if val_prec > 0 else None
+                    if miglioramento is not None:
+                        st.info(f"📈 Miglioramento rispetto al test precedente: **{miglioramento:+.2f}%**")
+
+                # 5. Badge se migliora di livello
+                livello_prec = None
+                if benchmark is not None and isinstance(benchmark, pd.Series):
+                    # ...existing code for livello_prec_nome...
+                    if livello_nome_trovato and livello_prec_nome:
+                        if livelli_val[livello_nome_trovato.lower()] > livelli_val[livello_prec_nome]:
+                            badge = True
+                if badge:
+                    st.success("🎉 **Complimenti! Hai sbloccato un nuovo livello!**")
+
+            # Alla fine, resetta il flag per non mostrare l'expander al prossimo caricamento
+            st.session_state['show_expander'] = False
 
 # Pagina: Dashboard Atleta
 elif pagina == "📈 Dashboard Atleta":
@@ -684,7 +940,6 @@ if pagina == "⚙️ Gestione Benchmark" and utente['ruolo'] == 'coach':
     # Aggiungi un nuovo benchmark
     st.write("### Aggiungi un nuovo benchmark:")
     nuovo_esercizio = st.selectbox("Esercizio", esercizi_df["esercizio"].unique(), key="aggiungi_esercizio")
-    tipo_valore = st.selectbox("Tipo di valore", ["kg", "kg_rel", "reps", "tempo", "valore"], key="aggiungi_tipo_valore")
     genere = st.selectbox("Genere", ["Maschio", "Femmina", "Altro"], key="aggiungi_genere")
     base = st.text_input("Base", key="aggiungi_base")
     principiante = st.text_input("Principiante", key="aggiungi_principiante")
@@ -890,7 +1145,7 @@ if pagina == "📅 Calendario WOD":
 
     if not wod_giorno.empty:
         st.write(f"### WOD del {data_str}")
-        st.write(f"**Titolo:** {wod_giorno.iloc[0]['titolo']}")
+        st.write(f"**Nome:** {wod_giorno.iloc[0]['nome']}")  # Corrected column name
         st.write(f"**Descrizione:** {wod_giorno.iloc[0]['descrizione']}")
     else:
         st.info("Nessun WOD pubblicato per questa data.")
@@ -920,4 +1175,301 @@ if pagina == "📅 Calendario WOD":
 
     st.write("---")
     st.write("### Storico WOD pubblicati")
-    st.dataframe(wod_df.sort_values("data", ascending=False))
+    # Modifica per gestire formati di data non standard
+    wod_df["data"] = pd.to_datetime(wod_df["data"], format="%Y-%m-%d", errors="coerce")
+    if wod_df["data"].isnull().any():
+        st.error("Errore nel formato delle date in 'wod.csv'. Assicurati che siano nel formato 'YYYY-MM-DD'.")
+        st.stop()
+
+    wod_df = wod_df.sort_values("data", ascending=False)
+
+    for idx, row in wod_df.iterrows():
+        # Verifica che la colonna 'nome' esista, altrimenti usa un valore predefinito
+        nome_wod = row['nome'] if 'nome' in row else "WOD"
+        with st.expander(f"{row['data'].date()} - {nome_wod}"):
+            st.markdown(f"**Descrizione:** {row['descrizione']}")
+            esercizi_collegati = row['esercizi'].split(";") if 'esercizi' in row and pd.notnull(row['esercizi']) else []
+            if esercizi_collegati:
+                st.markdown(f"**Esercizi collegati:** {', '.join(esercizi_collegati)}")
+
+            # Mostra test dell’atleta legati al WOD
+            test_collegati = test_df[
+                (test_df["nome"] == utente["nome"]) &
+                (test_df["esercizio"].isin(esercizi_collegati))
+            ]
+            if not test_collegati.empty:
+                st.markdown("📊 **Test collegati a questo WOD:**")
+                st.dataframe(test_collegati[["data", "esercizio", "valore", "tipo_valore"]])
+            else:
+                st.info("Nessun test collegato trovato per questo WOD.")
+
+            # Aggiungi nota personale
+            st.markdown("📝 **Nota personale**")
+            note_key = f"nota_{idx}_{utente['nome']}"
+            nota = st.text_area("Scrivi una nota (visibile solo a te)", key=note_key)
+            if st.button("Salva nota", key=f"salva_{note_key}"):
+                # Salva su CSV o mostra (puoi implementare salvataggio locale più avanti)
+                st.success("Nota salvata! (implementare salvataggio permanente)")
+
+# Pagina: Storico Progressi
+if pagina == "📈 Storico Progressi":
+    st.subheader("📈 Storico Progressi per Esercizio")
+
+    # Selezione esercizio
+    esercizi_disponibili = test_df[test_df['nome'] == utente['nome']]['esercizio'].unique()
+    if len(esercizi_disponibili) == 0:
+        st.info("Non ci sono test disponibili per questo utente.")
+    else:
+        esercizio_sel = st.selectbox("Seleziona esercizio", esercizi_disponibili)
+        dati_esercizio = test_df[(test_df['nome'] == utente['nome']) & (test_df['esercizio'] == esercizio_sel)].copy()
+
+        # Assicurati che i dati siano ordinati per data
+        dati_esercizio["data"] = pd.to_datetime(dati_esercizio["data"], format="%Y-%m-%d", errors="coerce")
+        dati_esercizio = dati_esercizio.sort_values("data")
+
+        # Calcola livello per ogni test
+        livelli_val = {"base": 1, "principiante": 2, "intermedio": 3, "buono": 4, "elite": 5}
+        livelli = []
+        for _, row in dati_esercizio.iterrows():
+            benchmark = benchmark_df[
+                (benchmark_df['esercizio'] == row['esercizio']) &
+                (benchmark_df['genere'] == row.get('genere', utente.get('genere', 'Maschio')))
+            ]
+            benchmark = benchmark.squeeze() if not benchmark.empty else None
+            livello = "Non valutabile"
+            val = None
+            if benchmark is not None and isinstance(benchmark, pd.Series):
+                tipo = benchmark['tipo_valore']
+                try:
+                    peso_corporeo = float(row['peso_corporeo'])
+                except Exception:
+                    peso_corporeo = None
+                if tipo == 'kg_rel' and peso_corporeo and peso_corporeo != 0:
+                    try:
+                        val = float(row['valore']) / peso_corporeo
+                    except Exception:
+                        val = None
+                elif tipo == 'reps' or tipo_valore == 'valore':
+                    try:
+                        val = float(row['valore'])
+                    except Exception:
+                        val = None
+                elif tipo == 'tempo':
+                    try:
+                        m, s = map(int, str(row['valore']).split(":"))
+                        val = m * 60 + s
+                        benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
+                            lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]) if ":" in str(x) else float(x)
+                            if pd.notnull(x) else x
+                        )
+                    except Exception:
+                        val = None
+                else:
+                    try:
+                        val = float(row['valore'])
+                    except Exception:
+                        val = None
+
+                livello_num = 0
+                livello_nome_trovato = None
+                if tipo == 'tempo':
+                    livelli_ordine = list(reversed(list(livelli_val.keys())))
+                    for livello_nome in livelli_ordine:
+                        soglia = benchmark[livello_nome]
+                        if isinstance(soglia, str) and ":" in soglia:
+                            m, s = map(int, soglia.split(":"))
+                            soglia = m * 60 + s
+                        else:
+                            soglia = float(soglia)
+                        if val is not None and val <= soglia:
+                            livello_nome_trovato = livello_nome.capitalize()
+                            livello_num = livelli_val[livello_nome]
+                            break
+                else:
+                    for livello_nome in reversed(list(livelli_val.keys())):
+                        soglia = benchmark[livello_nome]
+                        if isinstance(soglia, str):
+                            soglia = float(soglia)
+                        if val is not None and val >= soglia:
+                            livello_nome_trovato = livello_nome.capitalize()
+                            livello_num = livelli_val[livello_nome]
+                            break
+                livello = livello_nome_trovato if livello_nome_trovato else "Non valutabile"
+            livelli.append(livello)
+
+        dati_esercizio['livello'] = livelli
+
+        # Prepara valori per il grafico
+        x = pd.to_datetime(dati_esercizio['data'])
+        y = dati_esercizio['valore']
+        testo = [
+            f"Valore: {v}<br>Livello: {l}" for v, l in zip(dati_esercizio['valore'], dati_esercizio['livello'])
+        ]
+
+        # Grafico a linee
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode='lines+markers',
+            marker=dict(size=10, color='rgba(0,123,255,0.8)'),
+            line=dict(color='rgba(0,123,255,0.5)', width=2),
+            text=testo,
+            hoverinfo='text'
+        ))
+        fig.update_layout(
+            xaxis_title="Data",
+            yaxis_title="Valore",
+            title=f"Andamento nel tempo: {esercizio_sel}",
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+# Pagina: WOD
+elif pagina == "📒 WOD":
+    st.subheader("📒 Workout of the Day (WOD)")
+
+    oggi = datetime.date.today()
+    wod_oggi = wod_df[wod_df["data"] == pd.to_datetime(oggi)]
+
+    if not wod_oggi.empty:
+        wod = wod_oggi.iloc[0]
+        st.subheader(f"🏋️‍♂️ WOD del giorno: {wod['nome']}")
+
+        # Mostra i 3 livelli
+        st.markdown("### Livelli disponibili:")
+        st.markdown(f"**Principiante**: {wod['principiante']}")
+        st.markdown(f"**Intermedio**: {wod['intermedio']}")
+        st.markdown(f"**Avanzato**: {wod['avanzato']}")
+
+        st.divider()
+        st.subheader("📥 Inserisci il tuo risultato")
+
+        livello = st.radio("Livello scelto", ["principiante", "intermedio", "avanzato"])
+        tipo_valore = wod["tipo_valore"]
+
+        if tipo_valore == "tempo":
+            minuti = st.number_input("Minuti", min_value=0, max_value=59)
+            secondi = st.number_input("Secondi", min_value=0, max_value=59)
+            risultato = f"{int(minuti):02d}:{int(secondi):02d}"
+        else:
+            risultato = st.number_input("Risultato (reps o rounds)", step=1)
+
+        if st.button("Salva risultato"):
+            risultati_df = pd.read_csv("fitness_app/wod_risultati.csv") if os.path.exists("fitness_app/wod_risultati.csv") else pd.DataFrame(columns=["nome", "data_wod", "livello", "risultato", "tipo_valore"])
+            nuovo_record = {
+                "nome": utente["nome"],
+                "data_wod": oggi.strftime("%Y-%m-%d"),
+                "livello": livello,
+                "risultato": risultato,
+                "tipo_valore": tipo_valore
+            }
+            risultati_df = pd.concat([risultati_df, pd.DataFrame([nuovo_record])], ignore_index=True)
+            risultati_df.to_csv("fitness_app/wod_risultati.csv", index=False)
+            st.success("Risultato salvato!")
+
+        st.divider()
+        st.subheader("📊 Classifica del giorno")
+
+        if os.path.exists("fitness_app/wod_risultati.csv"):
+            risultati_df = pd.read_csv("fitness_app/wod_risultati.csv")
+            classifica = risultati_df[risultati_df["data_wod"] == oggi.strftime("%Y-%m-%d")]
+
+            if not classifica.empty:
+                if tipo_valore == "tempo":
+                    classifica["valore_sec"] = classifica["risultato"].apply(lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]))
+                    classifica = classifica.sort_values("valore_sec")
+                else:
+                    classifica["valore_num"] = pd.to_numeric(classifica["risultato"], errors="coerce")
+                    classifica = classifica.sort_values("valore_num", ascending=False)
+
+                st.dataframe(classifica[["nome", "livello", "risultato"]].reset_index(drop=True))
+            else:
+                st.info("Nessun risultato registrato oggi.")
+    else:
+        st.info("Nessun WOD pubblicato per oggi.")
+
+# Pagina: Dashboard iniziale
+if pagina == "🏠 Dashboard":
+    st.title("🏠 Dashboard Atleta")
+
+    # Debug: Ensure the page is being rendered
+    st.write("DEBUG: Rendering Dashboard Page")
+
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        st.image("https://cdn-icons-png.flaticon.com/512/847/847969.png", width=80, caption="Avatar")
+    with col2:
+        st.markdown(f"**👤 Nome:** {utente['nome']}")
+        eta = datetime.date.today().year - pd.to_datetime(utente['data_nascita']).year
+        st.markdown(f"**🎂 Età:** {eta} anni")
+        st.markdown(f"**⚖️ Peso:** {utente['peso']} kg")
+        st.markdown(f"**🏅 Genere:** {utente['genere']}")
+
+    st.divider()
+
+    # Livello medio per area
+    st.subheader("📊 Livello medio per area")
+    test_utente = test_df[test_df["nome"] == utente["nome"]].copy()
+    test_utente["data"] = pd.to_datetime(test_utente["data"])
+    test_utente = test_utente.sort_values("data")
+
+    livelli_val = {"base": 1, "principiante": 2, "intermedio": 3, "buono": 4, "elite": 5}
+    radar_labels = []
+    radar_values = []
+
+    for cat in ["forza", "ginnastica", "metabolico"]:
+        esercizi_cat = esercizi_df[esercizi_df["categoria"] == cat]["esercizio"].unique()
+        test_cat = test_utente[test_utente["esercizio"].isin(esercizi_cat)]
+        if not test_cat.empty:
+            test_cat = test_cat.sort_values("data").groupby("esercizio").tail(1)
+            livelli = []
+            for _, row in test_cat.iterrows():
+                benchmark = benchmark_df[(benchmark_df["esercizio"] == row["esercizio"]) & (benchmark_df["genere"] == utente["genere"])]
+                if benchmark.empty:
+                    continue
+                benchmark = benchmark.squeeze()
+                tipo = benchmark["tipo_valore"]
+                if tipo == "kg_rel":
+                    val = float(row["relativo"])
+                elif tipo == "tempo":
+                    m, s = map(int, row["valore"].split(":"))
+                    val = m * 60 + s
+                    benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
+                        lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1])
+                    )
+                else:
+                    val = float(row["valore"])
+
+                livello = "base"
+                for nome_liv in reversed(livelli_val.keys()):
+                    if tipo == "tempo" and val <= float(benchmark[nome_liv]):
+                        livello = nome_liv
+                    elif tipo != "tempo" and val >= float(benchmark[nome_liv]):
+                        livello = nome_liv
+                        break
+                livelli.append(livelli_val.get(livello, 0))
+            if livelli:
+                radar_labels.append(cat.capitalize())
+                radar_values.append(round(sum(livelli) / len(livelli), 2))
+
+    if radar_labels:
+        fig = go.Figure(data=go.Scatterpolar(r=radar_values, theta=radar_labels, fill="toself"))
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 5])), showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Test recenti
+    st.subheader("📈 Test recenti")
+    test_recenti = test_utente.sort_values("data", ascending=False).head(5)
+    st.dataframe(test_recenti[["data", "esercizio", "valore"]])
+
+    # Prossimi test consigliati (oltre 6 settimane fa)
+    st.subheader("⏰ Test da ripetere")
+    cutoff_date = datetime.date.today() - datetime.timedelta(weeks=6)
+    test_scaduti = test_utente[test_utente["data"] < pd.to_datetime(cutoff_date)]
+    test_scaduti = test_scaduti.groupby("esercizio").tail(1)
+    if not test_scaduti.empty:
+        st.warning("⚠️ Questi test andrebbero aggiornati:")
+        st.dataframe(test_scaduti[["data", "esercizio", "valore"]])
+    else:
+        st.success("✅ Nessun test da aggiornare al momento.")
