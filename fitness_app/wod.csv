@@ -1,8 +1,2 @@
-data,titolo,descrizione
-28/05/2025,🦾 SYNC & PUSH,5 pull-ups 10 push-ups and 15 squats
-2025-05-29,“Cindy Full of Grace”,"3 Cycles, For Time:
-3 Rounds of ""Cindy""*
-10 Clean-and-Jerks (135/95 lb)
-
-*1 round of ""Cindy"" = 5 Pull-Ups, 10 Push-Ups, 15 Air Squats
-"
+nome,descrizione,data,principiante,intermedio,avanzato,esercizi,tipo_valore
+Fran,"Benchmark WOD 21-15-9","2025-05-29","21-15-9 Thruster 20kg + Pull-up con elastico","21-15-9 Thruster 30kg + Pull-up","21-15-9 Thruster 42.5kg + Pull-up strict","Thruster;Pull-up","tempo"
