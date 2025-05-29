@@ -1,0 +1,58 @@
+categoria,esercizio,tipo_valore
+forza,Back Squat 1RM,kg_rel
+forza,Deadlift 1RM,kg_rel
+forza,Strict Press,kg_rel
+ginnastica,Max Pull-Up,reps
+ginnastica,Max Toes to Bar,reps
+ginnastica,L-Sit Hold,tempo
+metabolico,Fran,tempo
+monostrutturale,500m Row,tempo
+monostrutturale,1 Mile Run,tempo
+mobilità,Overhead Squat,kg_rel
+forza,Front Squat,kg_rel
+potenza,Power Clean,kg_rel
+potenza,Squat Clean,kg_rel
+potenza,Power Snatch,kg_rel
+forza,Bench Press,kg_rel
+potenza,Push Press,kg_rel
+potenza,Push Jerk,kg_rel
+potenza,Split Jerk,kg_rel
+forza,Strict Press,kg_rel
+ginnastica,Pull-up,reps
+ginnastica,Chest To Bar,reps
+ginnastica,Bar Muscle-up,reps
+ginnastica,Ring Muscle-up,reps
+ginnastica,Handstand Push-up,reps
+ginnastica,Handstand Walk,metri
+ginnastica,Toes To Bar,reps
+ginnastica,Sit-up,reps
+ginnastica,V-up,reps
+ginnastica,Pistol Squat,reps
+monostrutturale,Row 500m,tempo
+monostrutturale,Row 1000m,tempo
+monostrutturale,Run 400m,tempo
+monostrutturale,Run 1 Mile,tempo
+monostrutturale,Bikeerg 2km,tempo
+monostrutturale,Skierg 500m,tempo
+monostrutturale,Burpee,reps
+monostrutturale,Double Under UB,reps
+monostrutturale,Wall Ball,reps
+metabolico,Murph,tempo
+metabolico,Angie,tempo
+metabolico,Chelsea,rounds
+metabolico,Eva,tempo
+metabolico,Linda,tempo
+metabolico,Annie Are You OK,tempo
+metabolico,Barbara,tempo
+metabolico,Fight Gone Bad,reps
+metabolico,Filthy Fifty,tempo
+metabolico,Nancy,tempo
+metabolico,Grace,tempo
+metabolico,Isabel,tempo
+metabolico,Jackie,tempo
+metabolico,Karen,tempo
+metabolico,Helen,tempo
+metabolico,Annie,tempo
+metabolico,Diane,tempo
+metabolico,Elizabeth,tempo
+metabolico,Cindy,reps
