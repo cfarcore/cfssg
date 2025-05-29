@@ -2,12 +2,19 @@ import streamlit as st
 import pandas as pd
 import datetime
 import plotly.graph_objects as go
+import os
 
 # Load CSVs
 utenti_df = pd.read_csv("fitness_app/utenti.csv")
 esercizi_df = pd.read_csv("fitness_app/esercizi.csv")
 test_df = pd.read_csv("fitness_app/test.csv")
 benchmark_df = pd.read_csv("fitness_app/benchmark.csv")
+
+# Carica il CSV dei WOD (Workout Of the Day)
+wod_path = "fitness_app/wod.csv"
+if not os.path.exists(wod_path):
+    pd.DataFrame(columns=["data", "titolo", "descrizione"]).to_csv(wod_path, index=False)
+wod_df = pd.read_csv(wod_path)
 
 st.set_page_config(page_title="Fitness Gauge", layout="wide")
 st.title("🏋️ Fitness Gauge")
@@ -63,9 +70,10 @@ if st.session_state.refresh:
 utente = st.session_state.utente
 st.success(f"Benvenuto, {utente['nome']} ({utente['ruolo']})")
 
-# Barra laterale per navigazione
+# Barra laterale per navigazione con pulsanti
 if utente['ruolo'] == 'coach':
     pagine_sidebar = [
+        "📅 Calendario WOD",
         "➕ Inserisci nuovo test",
         "👤 Profilo Atleta",
         "⚙️ Gestione Esercizi",
@@ -77,17 +85,37 @@ if utente['ruolo'] == 'coach':
     ]
 else:
     pagine_sidebar = [
+        "📅 Calendario WOD",
         "➕ Inserisci nuovo test",
         "👤 Profilo Atleta",
         "📊 Grafici",
         "📜 Storico Test"  # Nuova pagina per la storia dei test atleta
     ]
 
-pagina = st.sidebar.radio("Navigazione", pagine_sidebar)
+# Inizializza la pagina attiva se non esiste
+if 'pagina_attiva' not in st.session_state:
+    st.session_state.pagina_attiva = pagine_sidebar[0]
 
-# Pulsante per uscire
-if st.sidebar.button("Esci", key="sidebar_logout_button"):
-    logout()
+with st.sidebar:
+    # CSS per rendere i pulsanti sidebar della stessa dimensione
+    st.markdown("""
+        <style>
+        div.stButton > button {
+            width: 100% !important;
+            min-width: 120px;
+            margin-bottom: 0.25rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    for pagina_nome in pagine_sidebar:
+        if st.button(pagina_nome, key=f"btn_{pagina_nome}"):
+            st.session_state.pagina_attiva = pagina_nome
+
+    # Pulsante per uscire
+    if st.button("Esci", key="sidebar_logout_button"):
+        logout()
+
+pagina = st.session_state.pagina_attiva
 
 # Definizione dei livelli di valutazione
 livelli_val = {"base": 1, "principiante": 2, "intermedio": 3, "buono": 4, "elite": 5}
@@ -286,7 +314,7 @@ elif pagina == "📊 Grafici":
             genere_row = row['genere'] if 'genere' in row and pd.notnull(row['genere']) else utente['genere']
             benchmark = benchmark_df[
                 (benchmark_df['esercizio'] == row['esercizio']) &
-                (benchmark_df['genere'] == genere_row)
+                (benchmarkDf['genere'] == genere_row)
             ]
             benchmark = benchmark.squeeze() if not benchmark.empty else None
             livello = "Non valutabile"
@@ -408,8 +436,8 @@ elif pagina == "📊 Grafici":
             livelli_cat = []
             for _, row in test_cat.iterrows():
                 benchmark = benchmark_df[
-                    (benchmark_df['esercizio'] == row['esercizio']) &
-                    (benchmark_df['genere'] == row['genere'])
+                    (benchmarkDf['esercizio'] == row['esercizio']) &
+                    (benchmarkDf['genere'] == row['genere'])
                 ]
                 benchmark = benchmark.squeeze() if not benchmark.empty else None
                 livello_num = 0
@@ -723,6 +751,11 @@ if pagina == "➕ Aggiungi Utente" and utente['ruolo'] == 'coach':
     st.write("### Utenti esistenti:")
     st.dataframe(utenti_df)
 
+    # Mostra solo i coach esistenti
+    st.write("### Coach esistenti:")
+    coach_df = utenti_df[utenti_df["ruolo"] == "coach"]
+    st.dataframe(coach_df)
+
     # Seleziona un utente da eliminare
     st.write("### Elimina un utente:")
     utente_da_eliminare = st.selectbox("Seleziona un utente da eliminare", utenti_df["nome"].unique(), key="elimina_utente")
@@ -738,7 +771,7 @@ if pagina == "➕ Aggiungi Utente" and utente['ruolo'] == 'coach':
 
         st.success(f"Utente '{utente_da_eliminare}' e i suoi dati sono stati eliminati con successo!")
 
-    # Input per i dettagli del nuovo utente
+    # Input per i dettagli del nuovo utente (coach o atleta)
     st.write("### Aggiungi un nuovo utente:")
     nuovo_nome = st.text_input("Nome utente")
     nuovo_pin = st.text_input("PIN utente", type="password")
@@ -747,7 +780,7 @@ if pagina == "➕ Aggiungi Utente" and utente['ruolo'] == 'coach':
     nuova_data_nascita = st.date_input(
         "Data di nascita",
         value=datetime.date(2000, 1, 1),
-        min_value=datetime.date(1960, 1, 1),  # Imposta il minimo al 1960
+        min_value=datetime.date(1960, 1, 1),
         key="aggiungi_data_nascita"
     )
     nuovo_genere = st.selectbox("Genere", ["Maschio", "Femmina", "Altro"], key="aggiungi_genere_utente")
@@ -764,7 +797,7 @@ if pagina == "➕ Aggiungi Utente" and utente['ruolo'] == 'coach':
             }
             utenti_df = pd.concat([utenti_df, pd.DataFrame([nuovo_utente])], ignore_index=True)
             utenti_df.to_csv("fitness_app/utenti.csv", index=False)
-            st.success("Nuovo utente aggiunto con successo!")
+            st.success(f"Nuovo utente '{nuovo_nome}' aggiunto con successo come {nuovo_ruolo}!")
         else:
             st.error("Compila tutti i campi richiesti.")
 
@@ -845,3 +878,46 @@ if pagina == "📜 Storico Test" and utente['ruolo'] == 'atleta':
         st.info("Non ci sono test disponibili per questo utente.")
     else:
         st.dataframe(atleta_test.sort_values("data", ascending=False))
+
+# Pagina: Calendario WOD
+if pagina == "📅 Calendario WOD":
+    st.subheader("📅 Calendario WOD (Workout Of the Day)")
+
+    # Seleziona una data
+    data_selezionata = st.date_input("Seleziona una data", value=datetime.date.today(), key="wod_date")
+    data_str = data_selezionata.strftime("%Y-%m-%d")
+    wod_giorno = wod_df[wod_df["data"] == data_str]
+
+    if not wod_giorno.empty:
+        st.write(f"### WOD del {data_str}")
+        st.write(f"**Titolo:** {wod_giorno.iloc[0]['titolo']}")
+        st.write(f"**Descrizione:** {wod_giorno.iloc[0]['descrizione']}")
+    else:
+        st.info("Nessun WOD pubblicato per questa data.")
+
+    # Solo i coach possono aggiungere/modificare/eliminare WOD
+    if utente['ruolo'] == 'coach':
+        st.write("---")
+        st.write("### Pubblica o modifica WOD per questa data")
+        titolo_wod = st.text_input("Titolo WOD", value=wod_giorno.iloc[0]['titolo'] if not wod_giorno.empty else "")
+        descrizione_wod = st.text_area("Descrizione WOD", value=wod_giorno.iloc[0]['descrizione'] if not wod_giorno.empty else "")
+
+        if st.button("Salva/Modifica WOD", key="salva_wod"):
+            # Se esiste già, aggiorna; altrimenti aggiungi
+            if not wod_giorno.empty:
+                wod_df.loc[wod_df["data"] == data_str, ["titolo", "descrizione"]] = [titolo_wod, descrizione_wod]
+            else:
+                nuovo_wod = {"data": data_str, "titolo": titolo_wod, "descrizione": descrizione_wod}
+                wod_df = pd.concat([wod_df, pd.DataFrame([nuovo_wod])], ignore_index=True)
+            wod_df.to_csv(wod_path, index=False)
+            st.success("WOD salvato/modificato con successo!")
+
+        if not wod_giorno.empty:
+            if st.button("Elimina WOD", key="elimina_wod"):
+                wod_df = wod_df[wod_df["data"] != data_str]
+                wod_df.to_csv(wod_path, index=False)
+                st.success("WOD eliminato con successo!")
+
+    st.write("---")
+    st.write("### Storico WOD pubblicati")
+    st.dataframe(wod_df.sort_values("data", ascending=False))
