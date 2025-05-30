@@ -21,12 +21,11 @@ if not os.path.exists(wod_path):
 wod_df = pd.read_csv(wod_path)
 
 # Correggi automaticamente i formati di data non validi
-def correggi_date(df, colonna_data):
+def correggi_date(df, colonna_data, data_predefinita="1970-01-01"):
     try:
         df[colonna_data] = pd.to_datetime(df[colonna_data], format="%Y-%m-%d", errors="coerce")
         if df[colonna_data].isnull().any():
-            st.warning("Alcune date non valide sono state rilevate e rimosse.")
-            df = df.dropna(subset=[colonna_data])
+            df[colonna_data].fillna(pd.to_datetime(data_predefinita), inplace=True)
     except Exception as e:
         st.error(f"Errore durante la correzione delle date: {e}")
         st.stop()
@@ -1166,7 +1165,7 @@ if pagina == "📅 Calendario WOD":
 
     if not wod_giorno.empty:
         st.write(f"### WOD del {data_str}")
-        st.write(f"**Nome:** {wod_giorno.iloc[0]['nome']}")  # Corrected column name
+        st.write(f"**Nome:** {wod_giorno.iloc[0]['titolo']}")
         st.write(f"**Descrizione:** {wod_giorno.iloc[0]['descrizione']}")
     else:
         st.info("Nessun WOD pubblicato per questa data.")
@@ -1270,7 +1269,7 @@ if pagina == "📈 Storico Progressi":
                         val = float(row['valore']) / peso_corporeo
                     except Exception:
                         val = None
-                elif tipo == 'reps' or tipo == 'valore':
+                elif tipo == 'reps' or tipo_valore == 'valore':
                     try:
                         val = float(row['valore'])
                     except Exception:
