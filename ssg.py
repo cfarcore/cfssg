@@ -80,12 +80,36 @@ if not st.session_state.logged_in:
 
 # Tema chiaro/scuro
 tema = st.sidebar.radio("🎨 Tema", ["Chiaro", "Scuro"])
-st.markdown(
-    f"""<style>
-    body {{ background-color: {'#1e1e1e' if tema == 'Scuro' else '#ffffff'}; color: {'#f0f0f0' if tema == 'Scuro' else '#000000'}; }}
-    </style>""",
-    unsafe_allow_html=True
-)
+if tema == "Scuro":
+    st.markdown(
+        """
+        <style>
+        body {
+            background-color: #1e1e1e;
+            color: #f0f0f0;
+        }
+        .stApp {
+            background-color: #1e1e1e;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.markdown(
+        """
+        <style>
+        body {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .stApp {
+            background-color: #ffffff;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 # Gestione del refresh della pagina
 if st.session_state.refresh:
@@ -315,7 +339,6 @@ if pagina == "➕ Inserisci nuovo test":
                         val = m * 60 + s
                         benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
                             lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]) if ":" in str(x) else float(x)
-                            if pd.notnull(x) else x
                         )
                     except Exception:
                         val = None
@@ -600,7 +623,6 @@ elif pagina == "📊 Grafici":
                         val = m * 60 + s
                         benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
                             lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]) if ":" in str(x) else float(x)
-                            if pd.notnull(x) else x
                         )
                     except Exception:
                         val = None
@@ -719,7 +741,6 @@ elif pagina == "📊 Grafici":
                             val = m * 60 + s
                             benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
                                 lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]) if ":" in str(x) else float(x)
-                                if pd.notnull(x) else x
                             )
                         except Exception:
                             val = None
@@ -1249,7 +1270,7 @@ if pagina == "📈 Storico Progressi":
                         val = float(row['valore']) / peso_corporeo
                     except Exception:
                         val = None
-                elif tipo == 'reps' or tipo_valore == 'valore':
+                elif tipo == 'reps' or tipo == 'valore':
                     try:
                         val = float(row['valore'])
                     except Exception:
@@ -1260,7 +1281,6 @@ if pagina == "📈 Storico Progressi":
                         val = m * 60 + s
                         benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
                             lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]) if ":" in str(x) else float(x)
-                            if pd.notnull(x) else x
                         )
                     except Exception:
                         val = None
@@ -1436,7 +1456,7 @@ if pagina == "🏠 Dashboard":
                     m, s = map(int, row["valore"].split(":"))
                     val = m * 60 + s
                     benchmark = benchmark[["base", "principiante", "intermedio", "buono", "elite"]].apply(
-                        lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1])
+                        lambda x: int(x.split(":")[0]) * 60 + int(x.split(":")[1]) if ":" in str(x) else float(x)
                     )
                 else:
                     val = float(row["valore"])
