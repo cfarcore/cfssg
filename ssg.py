@@ -208,7 +208,8 @@ if pagina == "➕ Inserisci nuovo test":
     # 🔁 BLOCCO SOSTITUITO: if st.button("Salva test"):
     if st.button("Salva test"):
         relativo = None
-        if tipo_valore == "kg_rel" and peso_corporeo > 0:
+        # Ensure peso_corporeo is properly checked before comparison
+        if tipo_valore == "kg_rel" and peso_corporeo is not None and peso_corporeo > 0:
             relativo = round(float(valore) / float(peso_corporeo), 2)
 
         nuovo_test = {
@@ -606,7 +607,7 @@ elif pagina == "📊 Grafici":
                 except Exception:
                     peso_corporeo = None
                 # Calcolo valore per la barra
-                if tipo == 'kg_rel' and peso_corporeo is not None and not pd.isna(peso_corporeo) and peso_corporeo != 0:
+                if tipo == 'kg_rel' and peso_corporeo is not None and peso_corporeo != 0:
                     try:
                         val = float(row['valore']) / peso_corporeo
                     except Exception:
@@ -724,7 +725,7 @@ elif pagina == "📊 Grafici":
                         peso_corporeo = float(row['peso_corporeo'])
                     except Exception:
                         peso_corporeo = None
-                    if tipo == 'kg_rel' and peso_corporeo is not None and not pd.isna(peso_corporeo) and peso_corporeo != 0:
+                    if tipo == 'kg_rel' and peso_corporeo is not None and peso_corporeo != 0:
                         try:
                             val = float(row['valore']) / peso_corporeo
                         except Exception:
